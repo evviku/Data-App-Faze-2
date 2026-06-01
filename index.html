@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keboola — Data Apps</title>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/kb.css">
+<link rel="stylesheet" href="styles/builder.css">
+<link rel="stylesheet" href="styles/pages.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="components/KbIcon.jsx"></script>
+<script type="text/babel" src="components/KbChrome.jsx"></script>
+<script type="text/babel" src="components/AppsData.jsx"></script>
+<script type="text/babel" src="components/AppPreview.jsx"></script>
+<script type="text/babel" src="components/Topbar.jsx"></script>
+<script type="text/babel" src="components/EmptyState.jsx"></script>
+<script type="text/babel" src="components/Generating.jsx"></script>
+<script type="text/babel" src="components/GeneratedApp.jsx"></script>
+<script type="text/babel" src="components/KaiPanel.jsx"></script>
+<script type="text/babel" src="components/GeneratedState.jsx"></script>
+<script type="text/babel" src="components/BuilderSync.jsx"></script>
+<script type="text/babel" src="components/ExploreMode.jsx"></script>
+<script type="text/babel" src="components/DraftHistory.jsx"></script>
+<script type="text/babel" src="components/ConnectRepoModal.jsx"></script>
+<script type="text/babel" src="components/AppsIndex.jsx"></script>
+<script type="text/babel" src="components/AppDetail.jsx?v=20260526"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "kpiTone": "neutral",
+  "density": "comfortable",
+  "editableOutlines": false,
+  "startRoute": "app-detail",
+  "draftState": "behind"
+}/*EDITMODE-END*/;
+
+const nowTime = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+};
+
+const App = () => {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  // ── Routing ──
+  // route: 'apps-index' | 'app-detail' | 'builder'
+  const [route, setRoute] = React.useState(t.startRoute || "apps-index");
+  const [activeAppId, setActiveAppId] = React.useState("customer-analytics");
+  const [detailTab, setDetailTab] = React.useState("overview");
+
+  // ── Builder state machine ──
+  const [builderState, setBuilderState] = React.useState("generated"); // 'empty' | 'generating' | 'generated'
+  const [appName, setAppName] = React.useState("Customer Analytics");
+  const [prompt, setPrompt] = React.useState("");
+  const [submittedPrompt, setSubmittedPrompt] = React.useState(
+    "Customer analytics dashboard with KPIs, revenue trend, segments and a top accounts table."
+  );
+  const [attachedTables, setAttachedTables] = React.useState([]);
+  const [fromAppId, setFromAppId] = React.useState("customer-analytics"); // null = new app
+
+  // App preview state
+  const [range, setRange] = React.useState("30d");
+  const [segmentMode, setSegmentMode] = React.useState("donut");
+  const [filter, setFilter] = React.useState("All");
+
+  const [kaiOpen, setKaiOpen] = React.useState(true);
+  const [messages, setMessages] = React.useState([]);
+  const [isThinking, setIsThinking] = React.useState(false);
+
+  const [hasUnpublished, setHasUnpublished] = React.useState(true);
+  const [isDraft, setIsDraft] = React.useState(true);
+  const [published, setPublished] = React.useState(false);
+
+  const [history, setHistory] = React.useState([]);
+  const [redoStack, setRedoStack] = React.useState([]);
+
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [publicPathOverride, setPublicPathOverride] = React.useState(null);
+  const [builderTheme, setBuilderTheme] = React.useState("keboola");
+  const [repoModal, setRepoModal] = React.useState(false);
+  const [surfaceKaiOpen, setSurfaceKaiOpen] = React.useState(false);
+  const [surfaceKaiMessages, setSurfaceKaiMessages] = React.useState([]);
+  const [surfaceKaiThinking, setSurfaceKaiThinking] = React.useState(false);
+  const [routeAnimating, setRouteAnimating] = React.useState(false);
+
+  // Personal draft state for the active app
+  const [draftState, setDraftState] = React.useState(t.draftState || "behind");
+  // Lifecycle override (so we can simulate first-publish / auto-create draft)
+  const [appLifecycle, setAppLifecycle] = React.useState(null);
+  const [kaiMode, setKaiMode] = React.useState("default"); // 'default' | 'conflict'
+  const [toast, setToast] = React.useState(null);
+
+  // Resolve the active lifecycle: explicit override else from existing app else draft-only (brand new)
+  const liveLifecycle = appLifecycle
+    || (fromAppId ? APPS.find(a => a.id === fromAppId)?.lifecycle : "draft-only")
+    || "has-draft";
+
+  // ── Explore Mode (version history) ──
+  // When non-null, the Builder body switches into read-only explore mode.
+  // We snapshot the prior draftState/kaiMode so "Return to Editing" can restore them.
+  const [exploreOpen, setExploreOpen] = React.useState(false);
+  const [exploreVersion, setExploreVersion] = React.useState(null);
+  const [exploreCompareWith, setExploreCompareWith] = React.useState(null);
+  const [exploreSnapshot, setExploreSnapshot] = React.useState(null);
+
+  // ── Draft History panel (Builder-side, separate from version history) ──
+  const [draftHistoryOpen, setDraftHistoryOpen] = React.useState(false);
+
+  // Expose to KaiPanel's mode-aware intros (which read window.__exploreVersion)
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__exploreVersion = exploreVersion;
+      window.__exploreCompareWith = exploreCompareWith;
+    }
+  }, [exploreVersion, exploreCompareWith]);
+
+  const openExplore = () => {
+    // snapshot prior state so we can restore it on exit
+    setExploreSnapshot({
+      kaiMode, kaiOpen, draftState,
+      messages, // preserve in-progress thread
+    });
+    const prodVersion = VERSIONS.find((v) => v.isProduction) || VERSIONS[0];
+    setExploreVersion(prodVersion);
+    setExploreCompareWith(null);
+    setExploreOpen(true);
+    setKaiOpen(true);
+    setKaiMode("explore");
+    setMessages([]); // fresh thread for explore mode
+  };
+
+  const exitExplore = () => {
+    setExploreOpen(false);
+    setExploreCompareWith(null);
+    // restore prior Kai state
+    if (exploreSnapshot) {
+      setKaiMode(exploreSnapshot.kaiMode);
+      setKaiOpen(exploreSnapshot.kaiOpen);
+      setMessages(exploreSnapshot.messages || []);
+    } else {
+      setKaiMode("default");
+    }
+  };
+
+  const setExploreCompareWithWrapper = (v) => {
+    setExploreCompareWith(v);
+    setKaiMode(v ? "compare" : "explore");
+  };
+
+  const restoreVersion = (v) => {
+    setExploreOpen(false);
+    setExploreCompareWith(null);
+    // Restoring a published version creates a new personal draft based on it.
+    // Production stays untouched. Builder opens with this draft.
+    setFromAppId(activeAppId);
+    const baseApp = APPS.find(a => a.id === activeAppId) || APPS[0];
+    setAppName(baseApp.name);
+    setSubmittedPrompt(baseApp.desc);
+    setBuilderState("generated");
+    setAppLifecycle("has-draft");
+    setDraftState("up-to-date");
+    setTweak("draftState", "up-to-date");
+    setKaiMode("default");
+    setKaiOpen(true);
+    setMessages([]);
+    setRoute("builder");
+    showToast(`Draft created from ${v?.v || "selected version"}`, "history");
+  };
+
+  // Restore a Builder draft checkpoint — updates the CURRENT draft in place.
+  // No new draft, no lifecycle change.
+  const restoreCheckpoint = (c) => {
+    setDraftHistoryOpen(false);
+    showToast(`Draft restored to “${c.label}”`, "history");
+  };
+
+  // Preview a published version inside Builder Explore Mode.
+  // Called from App Detail → Versions tab "Preview" action.
+  const previewVersion = (v) => {
+    const app = APPS.find((a) => a.id === activeAppId) || APPS[0];
+    setFromAppId(app.id);
+    setAppName(app.name);
+    setSubmittedPrompt(app.desc);
+    setBuilderState("generated");
+
+    // Snapshot prior state so "Return to Editing" can restore it.
+    setExploreSnapshot({
+      kaiMode: "default",
+      kaiOpen: true,
+      draftState,
+      messages: [],
+    });
+    setExploreVersion(v);
+    setExploreCompareWith(null);
+    setExploreOpen(true);
+    setKaiOpen(true);
+    setKaiMode("explore");
+    setMessages([]);
+    setRoute("builder");
+  };
+
+  const showToast = (text, icon = "check") => {
+    setToast({ text, icon });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // ── Draft sync actions (personal draft model) ──
+  const updateDraftBase = (fromBuilder = false) => {
+    if (fromBuilder) {
+      // In-builder animated sync flow via Kai
+      setKaiOpen(true);
+      setKaiMode("syncing");
+      setDraftState("syncing");
+      setTweak("draftState", "syncing");
+      // After Kai's animation completes, mark as just-synced, then up-to-date
+      setTimeout(() => {
+        setDraftState("just-synced");
+        setTweak("draftState", "up-to-date");
+        setKaiMode("default");
+      }, 4400);
+      setTimeout(() => {
+        setDraftState("up-to-date");
+      }, 9000);
+    } else {
+      // From the App Detail page — quick toast confirmation
+      setDraftState("up-to-date");
+      setTweak("draftState", "up-to-date");
+      showToast("Pulled 4 production changes into your draft", "arrow-down");
+    }
+  };
+
+  const reviewProductionChanges = (fromBuilder = false) => {
+    if (fromBuilder) {
+      // Already in builder — just open the Kai panel with review mode
+      setKaiOpen(true);
+      setKaiMode("review");
+      return;
+    }
+    // From the detail page — open the builder with Kai pre-loaded with the proposed review/update
+    setFromAppId(activeAppId);
+    setAppName(APPS.find(a => a.id === activeAppId)?.name || "Customer Analytics");
+    setSubmittedPrompt("Customer analytics dashboard");
+    setBuilderState("generated");
+    setMessages([{
+      role: "kai",
+      time: nowTime(),
+      text: "Production changed after your draft was created. I found 4 incoming updates: 2 can be applied safely and 2 require review. I can help you resolve the overlapping changes while preserving your draft.",
+      diff: {
+        title: "4 incoming updates · 2 require review",
+        subtitle: "Use Kai to review overlaps or resolve conflicts safely"
+      }
+    }]);
+    setKaiMode("review");
+    setKaiOpen(true);
+    setRoute("builder");
+  };
+
+  const resolveWithKai = (fromBuilder = false) => {
+    if (fromBuilder) {
+      // Already in builder — just open Kai panel with conflict mode
+      setKaiOpen(true);
+      setKaiMode("conflict");
+      setMessages([{ role: "kai", time: nowTime(), conflict: true }]);
+      return;
+    }
+    // From detail page — open the builder with a pre-loaded Kai conversation about conflict
+    setFromAppId(activeAppId);
+    setAppName(APPS.find(a => a.id === activeAppId)?.name || "Customer Analytics");
+    setSubmittedPrompt("Customer analytics dashboard");
+    setBuilderState("generated");
+    setMessages([{ role: "kai", time: nowTime(), conflict: true }]);
+    setKaiMode("conflict");
+    setKaiOpen(true);
+    setRoute("builder");
+  };
+
+  // User clicked "Apply merge" in Kai's conflict resolution. Mirror the
+  // update-draft-base flow: the sync bar transitions syncing → just-synced → hidden.
+  const applyMerge = () => {
+    setDraftState("syncing");
+    setTweak("draftState", "syncing");
+    setTimeout(() => {
+      setDraftState("just-synced");
+      setTweak("draftState", "up-to-date");
+    }, 2400);
+    setTimeout(() => {
+      setDraftState("up-to-date");
+    }, 6200);
+  };
+
+  const dismissSyncBar = () => {
+    if (draftState === "just-synced") {
+      setDraftState("up-to-date");
+    }
+  };
+
+  // Org / project for KbNavbar (existing tokens)
+  const [org, setOrg] = React.useState("Argo22");
+  const [project, setProject] = React.useState("Marketing Analytics");
+  const [env, setEnv] = React.useState("Production");
+  const defaultPublicPath = `/apps/${(appName || "untitled").toLowerCase().replace(/\s+/g,"-")}`;
+  const publicPath = publicPathOverride || defaultPublicPath;
+
+  // ── Navigation handlers ──
+  const goApps = () => {
+    setRoute("apps-index");
+    setSettingsOpen(false);
+  };
+
+  const openApp = (id) => {
+    setActiveAppId(id);
+    setDetailTab("overview");
+    setRoute("app-detail");
+  };
+
+  const continueEditing = (id) => {
+    const targetId = id || activeAppId;
+    const app = APPS.find((a) => a.id === targetId) || APPS[0];
+    setActiveAppId(targetId);
+    setFromAppId(app.id);
+    setAppName(app.name);
+    setPublicPathOverride(`/apps/${app.id}`);
+    setSubmittedPrompt(app.desc);
+    setBuilderState("generated");
+    setKaiOpen(true);
+    setKaiMode("default");
+
+    // Keep Kai continuity when entering the editor from index/detail.
+    if (surfaceKaiOpen) {
+      if (!messages.length && surfaceKaiMessages.length) {
+        setMessages(surfaceKaiMessages);
+      }
+      setSurfaceKaiOpen(false);
+    }
+
+    // Auto-create personal draft when entering a production-only app
+    const currentLifecycle = appLifecycle && fromAppId === app.id
+      ? appLifecycle
+      : app.lifecycle;
+    if (currentLifecycle === "production-only") {
+      setAppLifecycle("has-draft");
+      setDraftState("up-to-date");
+      setTweak("draftState", "up-to-date");
+      showToast("Personal draft created", "sparkles");
+    } else if (currentLifecycle === "draft-only") {
+      setAppLifecycle("draft-only");
+    } else {
+      // has-draft — clear any prior override and use app data
+      setAppLifecycle(null);
+    }
+
+    setRoute("builder");
+  };
+
+  const newApp = () => {
+    setFromAppId(null);
+    setAppName("");
+    setPublicPathOverride(null);
+    setPrompt("");
+    setSubmittedPrompt("");
+    setMessages([]); setHistory([]); setRedoStack([]);
+    setAttachedTables([]);
+    setBuilderState("empty");
+    setKaiOpen(false);
+    setRoute("builder");
+  };
+
+  const backToDetail = () => {
+    if (!fromAppId) {
+      // user was creating a new app — go back to index instead
+      setRoute("apps-index");
+      return;
+    }
+    setActiveAppId(fromAppId);
+    setRoute("app-detail");
+  };
+
+  // ── Builder actions ──
+  const generate = () => {
+    if (!prompt.trim()) return;
+    setSubmittedPrompt(prompt);
+    if (!appName) {
+      setAppName(guessName(prompt));
+    }
+    setBuilderState("generating");
+    setKaiOpen(true);
+    setKaiMode("generating");
+    // A newly created app is draft-only — there's no production version yet
+    setAppLifecycle("draft-only");
+    setFromAppId(null);
+  };
+
+  const onGenerated = () => {
+    setBuilderState("generated");
+    setKaiOpen(true);
+    setKaiMode("default");
+    setHasUnpublished(true);
+    setIsDraft(true);
+    pushHistory({ kind: "generate" });
+  };
+
+  const pushHistory = (entry) => {
+    setHistory((h) => [...h, entry]);
+    setRedoStack([]);
+  };
+
+  const undo = () => {
+    setHistory((h) => {
+      if (!h.length) return h;
+      const last = h[h.length - 1];
+      setRedoStack((r) => [...r, last]);
+      setHasUnpublished(true);
+      return h.slice(0, -1);
+    });
+  };
+  const redo = () => {
+    setRedoStack((r) => {
+      if (!r.length) return r;
+      const last = r[r.length - 1];
+      setHistory((h) => [...h, last]);
+      setHasUnpublished(true);
+      return r.slice(0, -1);
+    });
+  };
+
+  const sendMessage = (text) => {
+    const userMsg = { role: "user", text, time: nowTime() };
+    setMessages((m) => [...m, userMsg]);
+    setIsThinking(true);
+    setTimeout(() => {
+      const reply = synthesizeKaiReply(text);
+      setMessages((m) => [...m, { role: "kai", time: nowTime(), ...reply }]);
+      setIsThinking(false);
+      setHasUnpublished(true);
+      pushHistory({ kind: "edit", text });
+    }, 1400);
+  };
+
+  const sendSurfaceKaiMessage = (text) => {
+    const userMsg = { role: "user", text, time: nowTime() };
+    setSurfaceKaiMessages((m) => [...m, userMsg]);
+    setSurfaceKaiThinking(true);
+    setTimeout(() => {
+      const reply = synthesizeKaiReply(text);
+      setSurfaceKaiMessages((m) => [...m, { role: "kai", time: nowTime(), ...reply }]);
+      setSurfaceKaiThinking(false);
+    }, 900);
+  };
+
+  const onApplySuggestion = (s) => {
+    sendMessage(s.label + ". " + s.desc);
+  };
+
+  const publish = () => {
+    const wasDraftOnly = liveLifecycle === "draft-only";
+    setHasUnpublished(false);
+    setIsDraft(false);
+    setPublished(true);
+    // After publishing, lifecycle moves to production-only (draft becomes production)
+    setAppLifecycle("production-only");
+    setDraftState("up-to-date");
+    setTweak("draftState", "up-to-date");
+    if (wasDraftOnly) {
+      showToast("First version published to production", "rocket");
+    }
+    setTimeout(() => setPublished(false), 2600);
+  };
+
+  const discardDraft = () => {
+    setHasUnpublished(false);
+    setHistory([]);
+    setRedoStack([]);
+    showToast("Draft discarded", "trash");
+  };
+
+  const applyBuilderTheme = (theme) => {
+    setBuilderTheme(theme);
+    const tone = theme === "graphite" ? "neutral" : "accent";
+    setTweak("kpiTone", tone);
+  };
+
+  // global ⌘K opens Kai (only in builder generated state)
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        if (route === "builder" && builderState === "generated") {
+          e.preventDefault();
+          setKaiOpen(true);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [route, builderState]);
+
+  React.useEffect(() => {
+    setRouteAnimating(true);
+    const tId = setTimeout(() => setRouteAnimating(false), 240);
+    return () => clearTimeout(tId);
+  }, [route]);
+
+  // ── Render ──
+  const isBuilder = route === "builder";
+  const surfaceKaiPrompt = route === "app-detail"
+    ? `Help me with ${APPS.find((a) => a.id === activeAppId)?.name || "this app"}`
+    : "Help me manage Data Apps";
+
+  return (
+    <div className={`${isBuilder ? "db-app" : "kb-app"} ${routeAnimating ? "app-route-anim" : ""}`}>
+      {isBuilder ? (
+        <Topbar
+          state={builderState}
+          appName={appName}
+          setAppName={(v) => { setAppName(v); setHasUnpublished(true); }}
+          isDraft={isDraft}
+          hasUnpublished={hasUnpublished}
+          onUndo={undo}
+          onRedo={redo}
+          canUndo={history.length > 0}
+          canRedo={redoStack.length > 0}
+          onPreview={() => alert("Opening public preview in a new tab…")}
+          onShare={() => alert("Sharing link to this draft…")}
+          onPublish={publish}
+          publicUrlPath={publicPath}
+          onChangePublicUrl={(nextPath) => {
+            const raw = String(nextPath || "").trim();
+            const cleaned = raw.replace(/\/+$/, "").replace(/\/draft$/i, "");
+            const normalized = cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
+            setPublicPathOverride(normalized || defaultPublicPath);
+          }}
+          themeId={builderTheme}
+          onChangeTheme={applyBuilderTheme}
+          onDiscardDraft={discardDraft}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onCloseSettings={() => setSettingsOpen(false)}
+          settingsOpen={settingsOpen}
+          onResetToEmpty={() => {
+            setBuilderState("empty"); setPrompt(""); setSubmittedPrompt("");
+            setAppName(""); setMessages([]); setHistory([]); setRedoStack([]);
+            setKaiOpen(false); setAttachedTables([]); setSettingsOpen(false);
+            setFromAppId(null);
+            setPublicPathOverride(null);
+          }}
+          onNavApps={goApps}
+          onNavAppDetail={fromAppId ? backToDetail : null}
+          lifecycle={liveLifecycle}
+          draftState={draftState}
+          onSyncClick={() => {
+            if (draftState === "behind" || draftState === "conflict") resolveWithKai(true);
+          }}
+          exploreMode={exploreOpen}
+          exploreVersion={exploreVersion}
+          exploreInCompare={!!exploreCompareWith}
+          onOpenExplore={() => setDraftHistoryOpen(true)}
+          onExitExplore={exitExplore}
+          onRestoreVersion={restoreVersion}
+          onToggleCompare={() => {
+            if (exploreCompareWith) setExploreCompareWithWrapper(null);
+            else {
+              const other = VERSIONS.find((x) => x.v !== exploreVersion?.v);
+              setExploreCompareWithWrapper(other);
+            }
+          }}
+        />
+      ) : (
+        <KbNavbar
+          org={org} setOrg={setOrg}
+          project={project} setProject={setProject}
+          env={env} setEnv={setEnv}
+          onOpenKai={() => setSurfaceKaiOpen(true)}
+        />
+      )}
+
+      {published && (
+        <div style={{
+          position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)",
+          background: "var(--color-slate-900)", color: "#fff",
+          padding: "10px 16px", borderRadius: 9999,
+          font: "600 13px var(--font-sans)",
+          display: "flex", alignItems: "center", gap: 8,
+          zIndex: 200, boxShadow: "var(--shadow-lg)",
+          animation: "dbFadeIn 200ms ease-out",
+        }}>
+          <KbIcon name="rocket" size={14} />
+          Published v1.4.3 to <span className="kb-mono" style={{opacity: 0.8}}>
+            keboola.app{publicPath}
+          </span>
+        </div>
+      )}
+
+      {toast && (
+        <div style={{
+          position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)",
+          background: "var(--color-slate-900)", color: "#fff",
+          padding: "10px 16px", borderRadius: 9999,
+          font: "600 13px var(--font-sans)",
+          display: "flex", alignItems: "center", gap: 8,
+          zIndex: 200, boxShadow: "var(--shadow-lg)",
+          animation: "dbFadeIn 200ms ease-out",
+        }}>
+          <KbIcon name={toast.icon} size={14} />
+          {toast.text}
+        </div>
+      )}
+
+      {/* Body */}
+      {!isBuilder && (
+        <div className="kb-route-shell">
+          {route === "apps-index" && (
+            <AppsIndex onOpenApp={openApp} onNewApp={newApp} />
+          )}
+
+          {route === "app-detail" && (
+            <AppDetail
+              appId={activeAppId}
+              onBack={goApps}
+              onContinueEditing={() => continueEditing(activeAppId)}
+              onPublish={() => { continueEditing(activeAppId); setTimeout(publish, 600); }}
+              tab={detailTab}
+              setTab={setDetailTab}
+              lifecycleOverride={appLifecycle && fromAppId === activeAppId ? appLifecycle : null}
+              draftState={draftState}
+              onResolveWithKai={resolveWithKai}
+              onUpdateBase={updateDraftBase}
+              onReviewChanges={() => reviewProductionChanges(false)}
+              onRestoreVersion={restoreVersion}
+              onPreviewVersion={previewVersion}
+            />
+          )}
+
+          <div className={`app-kai-shell ${surfaceKaiOpen ? "open" : ""}`}>
+            <KaiPanel
+              onClose={() => setSurfaceKaiOpen(false)}
+              promptText={surfaceKaiPrompt}
+              messages={surfaceKaiMessages}
+              onSend={sendSurfaceKaiMessage}
+              isThinking={surfaceKaiThinking}
+              onApplySuggestion={(s) => sendSurfaceKaiMessage(`${s.label}. ${s.desc}`)}
+              mode="surface"
+            />
+          </div>
+        </div>
+      )}
+
+      {isBuilder && (
+        <div className="db-body">
+          {builderState === "empty" && (
+            <EmptyState
+              prompt={prompt}
+              setPrompt={setPrompt}
+              attachedTables={attachedTables}
+              setAttachedTables={setAttachedTables}
+              onSubmit={generate}
+              onConnectRepo={() => setRepoModal(true)}
+              onOpenKai={() => alert("The prompt surface above IS Kai. Type your idea there!")}
+            />
+          )}
+
+          {builderState === "generating" && (
+            <div style={{display: "flex", flex: 1, minHeight: 0, overflow: "hidden", alignItems: "stretch"}}>
+              <div style={{flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden"}}>
+                <Generating promptText={submittedPrompt} onComplete={onGenerated} />
+              </div>
+              <div className={`app-kai-shell ${kaiOpen ? "open" : ""}`}>
+                <KaiPanel
+                  onClose={() => setKaiOpen(false)}
+                  promptText={submittedPrompt}
+                  messages={[]}
+                  onSend={() => {}}
+                  isThinking={false}
+                  onApplySuggestion={() => {}}
+                  mode="generating"
+                />
+              </div>
+            </div>
+          )}
+
+          {builderState === "generated" && exploreOpen && (
+            <div style={{display: "flex", alignItems: "stretch", flex: 1, minHeight: 0, overflow: "hidden"}}>
+              <ExploreMode
+                selected={exploreVersion}
+                onSelect={(v) => {
+                  setExploreVersion(v);
+                  // exit compare when picking from sidebar
+                  setExploreCompareWith(null);
+                  setKaiMode("explore");
+                }}
+                compareWith={exploreCompareWith}
+                setCompareWith={setExploreCompareWithWrapper}
+                onRestore={restoreVersion}
+                onReturn={exitExplore}
+                kpiTone={t.kpiTone}
+                density={t.density}
+                range={range} setRange={setRange}
+                segmentMode={segmentMode} setSegmentMode={setSegmentMode}
+                filter={filter} setFilter={setFilter}
+              />
+              <div className={`app-kai-shell ${kaiOpen ? "open" : ""}`}>
+                <KaiPanel
+                  onClose={() => setKaiOpen(false)}
+                  promptText={submittedPrompt}
+                  messages={messages}
+                  onSend={sendMessage}
+                  isThinking={isThinking}
+                  onApplySuggestion={onApplySuggestion}
+                  mode={kaiMode}
+                  onApplyMerge={applyMerge}
+                />
+              </div>
+            </div>
+          )}
+
+          {builderState === "generated" && !exploreOpen && (
+            <GeneratedState
+              appName={appName}
+              publicPath={publicPath}
+              kpiTone={t.kpiTone}
+              density={t.density}
+              editable={t.editableOutlines}
+              showSyncBar={liveLifecycle === "has-draft"}
+              draftState={draftState}
+              onReviewSync={() => reviewProductionChanges(true)}
+              onUpdateDraftBase={() => updateDraftBase(true)}
+              onResolveWithKai={() => resolveWithKai(true)}
+              onDismissSyncBar={dismissSyncBar}
+              range={range} setRange={(v) => { setRange(v); setHasUnpublished(true); pushHistory({kind:"range", v}); }}
+              segmentMode={segmentMode} setSegmentMode={(v) => { setSegmentMode(v); setHasUnpublished(true); pushHistory({kind:"segment", v}); }}
+              filter={filter} setFilter={(v) => { setFilter(v); setHasUnpublished(true); pushHistory({kind:"filter", v}); }}
+              kaiOpen={kaiOpen} setKaiOpen={setKaiOpen}
+              promptText={submittedPrompt}
+              messages={messages}
+              sendMessage={sendMessage}
+              isThinking={isThinking}
+              onApplySuggestion={onApplySuggestion}
+              kaiMode={kaiMode}
+              onApplyMerge={applyMerge}
+            />
+          )}
+
+          {/* Draft History — lightweight in-Builder panel (NOT app versions) */}
+          {builderState === "generated" && draftHistoryOpen && (
+            <DraftHistory
+              appName={appName}
+              onClose={() => setDraftHistoryOpen(false)}
+              onRestore={restoreCheckpoint}
+              onOpenVersions={() => {
+                setDraftHistoryOpen(false);
+                if (fromAppId) {
+                  setActiveAppId(fromAppId);
+                  setDetailTab("versions");
+                  setRoute("app-detail");
+                }
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {repoModal && (
+        <ConnectRepoModal
+          onClose={() => setRepoModal(false)}
+          onConnect={({url, branch}) => {
+            setRepoModal(false);
+            setAppName(url.split("/").pop().replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()));
+            setPublicPathOverride(null);
+            setSubmittedPrompt(`Connected from ${url} on branch ${branch}.`);
+            setBuilderState("generating");
+            setKaiOpen(false);
+            setFromAppId(null);
+          }}
+        />
+      )}
+
+      {/* Tweaks panel */}
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Navigation">
+          <TweakSelect
+            label="Open at"
+            value={route}
+            onChange={(v) => {
+              setTweak("startRoute", v);
+              setRoute(v);
+              if (v === "builder") {
+                setBuilderState("generated");
+                setFromAppId(activeAppId);
+                setAppName(APPS.find(a => a.id === activeAppId)?.name || "Customer Analytics");
+                setKaiOpen(true);
+              }
+            }}
+            options={[
+              {value: "apps-index", label: "Apps Index"},
+              {value: "app-detail", label: "App Detail"},
+              {value: "builder", label: "Builder"},
+            ]}
+          />
+        </TweakSection>
+
+        <TweakSection title="Draft scenario">
+          <TweakSelect
+            label="App lifecycle"
+            value={liveLifecycle}
+            onChange={(v) => {
+              setAppLifecycle(v);
+              if (v === "has-draft" && (draftState === undefined || draftState === null)) {
+                setDraftState("up-to-date");
+              }
+            }}
+            options={[
+              {value: "draft-only", label: "Draft only · never deployed"},
+              {value: "production-only", label: "Production only · no active draft"},
+              {value: "has-draft", label: "Production + personal draft"},
+            ]}
+          />
+          {liveLifecycle === "has-draft" && (
+            <TweakRadio
+              label="Draft sync"
+              value={draftState}
+              onChange={(v) => {
+                setDraftState(v);
+                setTweak("draftState", v);
+              }}
+              options={[
+                {value: "up-to-date", label: "In sync"},
+                {value: "behind", label: "Behind"},
+              ]}
+            />
+          )}
+        </TweakSection>
+
+        <TweakSection title="Builder visual">
+          <TweakRadio
+            label="KPI tone"
+            value={t.kpiTone}
+            onChange={(v) => setTweak("kpiTone", v)}
+            options={[
+              {value: "neutral", label: "Neutral"},
+              {value: "accent", label: "Blue"},
+            ]}
+          />
+          <TweakRadio
+            label="Table density"
+            value={t.density}
+            onChange={(v) => setTweak("density", v)}
+            options={[
+              {value: "comfortable", label: "Roomy"},
+              {value: "compact", label: "Compact"},
+            ]}
+          />
+          <TweakToggle
+            label="Show edit outlines"
+            help="Hover sections to see Kai-editable regions"
+            value={t.editableOutlines}
+            onChange={(v) => setTweak("editableOutlines", v)}
+          />
+        </TweakSection>
+
+        <TweakSection title="Prototype">
+          <TweakButton label="▶ Replay creation flow" onClick={() => {
+            setRoute("builder");
+            setBuilderState("empty");
+            setFromAppId(null);
+            setPrompt("Customer analytics dashboard with KPIs, revenue trend, segments and a top accounts table.");
+            setAppName(""); setMessages([]); setHistory([]); setRedoStack([]);
+            setKaiOpen(false);
+            setTimeout(() => {
+              setSubmittedPrompt("Customer analytics dashboard with KPIs, revenue trend, segments and a top accounts table.");
+              setAppName("Customer Analytics");
+              setBuilderState("generating");
+            }, 600);
+          }} />
+        </TweakSection>
+      </TweaksPanel>
+    </div>
+  );
+};
+
+// ── helpers ──
+function guessName(p) {
+  const text = p.toLowerCase();
+  if (text.includes("customer")) return "Customer Analytics";
+  if (text.includes("sales") || text.includes("pipeline")) return "Sales Pipeline";
+  if (text.includes("inventory")) return "Inventory Health";
+  if (text.includes("attribution")) return "Marketing Attribution";
+  if (text.includes("lead")) return "Lead Scoring";
+  return "Untitled App";
+}
+
+function synthesizeKaiReply(text) {
+  const t = text.toLowerCase();
+  if (t.includes("polish") || t.includes("style") || t.includes("visual")) {
+    return {
+      text: "Tuned typography and tightened spacing on the KPI cards. Switched the accent to Keboola blue.",
+      diff: { title: "Polish visual style", subtitle: "8a3d1cd · 3 files · KPI tone → blue" },
+    };
+  }
+  if (t.includes("cohort") || t.includes("retention")) {
+    return {
+      text: "Added a weekly cohort retention heatmap below the segments chart. Reads from in.c-marts.orders.",
+      diff: { title: "Add cohort retention chart", subtitle: "0b9e2fa · +1 component · 64 cohorts" },
+    };
+  }
+  if (t.includes("connect") || t.includes("data") || t.includes("table")) {
+    return {
+      text: "Connected in.c-events.product_use. Indexed 1.2M events; refreshing now.",
+      diff: { title: "Connect product analytics", subtitle: "f12acc8 · +1 source · 1.2M rows" },
+    };
+  }
+  if (t.includes("email") || t.includes("digest") || t.includes("schedule")) {
+    return {
+      text: "Scheduled a weekly digest of the top 5 at-risk accounts. Runs Mondays at 09:00 CET to sarah@argo22.com.",
+      diff: { title: "Schedule weekly email", subtitle: "29ef0b1 · +1 flow · Mon 09:00 CET" },
+    };
+  }
+  if (t.includes("detail") || t.includes("drill") || t.includes("page")) {
+    return {
+      text: "Added a customer detail page. Click any account row to drill into ARR history and recent events.",
+      diff: { title: "Add customer detail page", subtitle: "44cbf03 · +1 route · /accounts/[id]" },
+    };
+  }
+  return {
+    text: "Got it. Applied the change to the draft — review the preview on the left and publish when you're happy.",
+    diff: { title: "Apply refinement", subtitle: `b7${Math.floor(Math.random()*9e5).toString(16)} · 2 files` },
+  };
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
