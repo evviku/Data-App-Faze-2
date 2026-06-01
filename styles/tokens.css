@@ -1,0 +1,303 @@
+/* ============================================================
+   KEBOOLA DESIGN SYSTEM — colors_and_type.css
+   shadcn/ui foundation customized with Keboola brand tokens.
+   Extracted from the Figma kit "shadcn_ui kit for Keboola".
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap");
+
+:root {
+  /* ── Keboola brand: primary (blue) ───────────────────────── */
+  --color-keboola-50:  #f1f7fd;
+  --color-keboola-100: #deedfc;
+  --color-keboola-200: #b1d6fc;
+  --color-keboola-300: #7cbdfe;
+  --color-keboola-400: #47a3ff;
+  --color-keboola-500: #1f8fff;
+  --color-keboola-600: #0075eb;
+  --color-keboola-700: #005cb8; /* primary action fill */
+  --color-keboola-800: #004285;
+  --color-keboola-900: #002e5c;
+  --color-keboola-950: #001f3d;
+
+  /* ── Keboola brand: danger (red) ─────────────────────────── */
+  --color-keboola-danger-50:  #fcf2f4;
+  --color-keboola-danger-100: #fae0e5;
+  --color-keboola-danger-200: #f6b6c1;
+  --color-keboola-danger-300: #f48598;
+  --color-keboola-danger-400: #f2546f;
+  --color-keboola-danger-500: #ef2e4e;
+  --color-keboola-danger-600: #e00b2e;
+  --color-keboola-danger-700: #b20622;
+  --color-keboola-danger-800: #820318;
+  --color-keboola-danger-900: #5a0211;
+  --color-keboola-danger-950: #3d010b;
+
+  /* ── Keboola brand: warning (amber) ──────────────────────── */
+  --color-keboola-warning-50:  #fbf0df;
+  --color-keboola-warning-100: #f9dfb8;
+  --color-keboola-warning-200: #facd89;
+  --color-keboola-warning-300: #fdb953;
+  --color-keboola-warning-400: #ffa51f;
+  --color-keboola-warning-500: #f59300;
+  --color-keboola-warning-600: #c27400;
+  --color-keboola-warning-700: #8f5600;
+  --color-keboola-warning-800: #5c3700;
+  --color-keboola-warning-900: #331f00;
+  --color-keboola-warning-950: #1a0f00;
+
+  /* ── Keboola brand: success (green, derived from kit usage) ── */
+  --color-keboola-success-50:  #ecfdf5;
+  --color-keboola-success-100: #d1fae5;
+  --color-keboola-success-200: #a7f3d0;
+  --color-keboola-success-300: #6ee7b7;
+  --color-keboola-success-400: #34d399;
+  --color-keboola-success-500: #10b981;
+  --color-keboola-success-600: #059669;
+  --color-keboola-success-700: #047857;
+  --color-keboola-success-800: #065f46;
+  --color-keboola-success-900: #064e3b;
+  --color-keboola-success-950: #022c22;
+
+  /* ── Slate (shadcn neutrals — used everywhere) ───────────── */
+  --color-slate-50:  #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+
+  /* ── KAI accent (purple — used for AI / dev-branch / KAI markers) ── */
+  --color-kai-300: #c084fc;
+  --color-kai-400: #a855f7;
+  --color-kai-500: #9747ff;  /* primary KAI marker */
+  --color-kai-600: #7c3aed;
+  --color-kai-700: #6d28d9;
+
+  /* ── Semantic surface tokens (light) ─────────────────────── */
+  --background: var(--color-slate-50);
+  --background-elevated: #ffffff;
+  --foreground: var(--color-slate-800);
+  --foreground-muted: var(--color-slate-500);
+  --foreground-subtle: var(--color-slate-400);
+
+  --card: #ffffff;
+  --card-foreground: var(--color-slate-800);
+
+  --muted: var(--color-slate-100);
+  --muted-foreground: var(--color-slate-500);
+
+  --border: var(--color-slate-200);
+  --border-strong: var(--color-slate-300);
+  --input: var(--color-slate-200);
+
+  --primary: var(--color-keboola-700);
+  --primary-hover: var(--color-keboola-800);
+  --primary-foreground: #ffffff;
+
+  --secondary: var(--color-slate-100);
+  --secondary-foreground: var(--color-slate-800);
+
+  --accent: var(--color-slate-100);
+  --accent-foreground: var(--color-slate-800);
+
+  --destructive: var(--color-keboola-danger-600);
+  --destructive-foreground: #ffffff;
+
+  --warning: var(--color-keboola-warning-500);
+  --warning-foreground: #ffffff;
+
+  --success: var(--color-keboola-success-600);
+  --success-foreground: #ffffff;
+
+  --ring: var(--color-keboola-500);
+
+  /* ── Typography ──────────────────────────────────────────── */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-display: "Geist", "Inter", sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ── Radii (shadcn standard, matching Figma kit) ─────────── */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius:    8px;   /* default — buttons, inputs */
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;  /* cards, large containers */
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* ── Spacing scale (4px base) ────────────────────────────── */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* ── Shadows (shadcn — subtle, neutral-tinted) ───────────── */
+  --shadow-xs: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05), 0 1px 3px 0 rgba(0,0,0,0.10);
+  --shadow:    0 1px 3px 0 rgba(0,0,0,0.10), 0 1px 2px -1px rgba(0,0,0,0.10);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.10), 0 2px 4px -2px rgba(0,0,0,0.10);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.10), 0 4px 6px -4px rgba(0,0,0,0.10);
+  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.10), 0 8px 10px -6px rgba(0,0,0,0.10);
+
+  /* Inset / focus ring */
+  --shadow-focus: 0 0 0 3px rgba(31,143,255,0.35); /* keboola-500 @ 35% */
+  --shadow-focus-destructive: 0 0 0 3px rgba(239,46,78,0.35);
+}
+
+/* ── Dark mode (deep slate, near-black) ───────────────────── */
+:root[data-theme="dark"], .dark {
+  --background: #0a0a0a;
+  --background-elevated: #161616;
+  --foreground: var(--color-slate-50);
+  --foreground-muted: var(--color-slate-400);
+  --foreground-subtle: var(--color-slate-500);
+
+  --card: #161616;
+  --card-foreground: var(--color-slate-50);
+
+  --muted: #1f1f1f;
+  --muted-foreground: var(--color-slate-400);
+
+  --border: rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.16);
+  --input: rgba(255,255,255,0.10);
+
+  --primary: var(--color-keboola-500);
+  --primary-hover: var(--color-keboola-400);
+
+  --secondary: #1f1f1f;
+  --secondary-foreground: var(--color-slate-50);
+
+  --accent: #1f1f1f;
+  --accent-foreground: var(--color-slate-50);
+
+  --destructive: var(--color-keboola-danger-500);
+}
+
+/* ── Base ────────────────────────────────────────────────── */
+html, body {
+  font-family: var(--font-sans);
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Type scale (shadcn typography richtext) ─────────────── */
+h1, .h1 {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 36px;
+  line-height: 40px;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+h2, .h2 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 36px;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+h3, .h3 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 32px;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+h4, .h4 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  color: var(--foreground);
+}
+p, .p {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 28px;
+  color: var(--foreground);
+}
+.lead {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 32px;
+  color: var(--foreground-muted);
+}
+.large {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 28px;
+}
+.small {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 20px;
+}
+.muted {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--foreground-muted);
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.05em;
+  color: var(--foreground-muted);
+  text-transform: none;
+}
+code, .code, kbd, samp {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  background: var(--muted);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  color: var(--foreground);
+}
+pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  background: var(--color-slate-900);
+  color: var(--color-slate-100);
+  padding: 16px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+blockquote {
+  border-left: 2px solid var(--border-strong);
+  padding-left: 16px;
+  font-style: italic;
+  color: var(--foreground-muted);
+}
